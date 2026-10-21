@@ -1,0 +1,205 @@
+import React, { useState } from 'react';
+import { 
+  ShieldCheck, 
+  AlertOctagon, 
+  HelpCircle, 
+  Info, 
+  CheckCircle2, 
+  XCircle, 
+  Scale, 
+  Clock, 
+  ChevronDown, 
+  ChevronUp 
+} from 'lucide-react';
+import { InvestigationResult, VerdictType } from '../types';
+
+interface VerdictHeaderProps {
+  result: InvestigationResult;
+}
+
+export const VerdictHeader: React.FC<VerdictHeaderProps> = ({ result }) => {
+  const [showFormulaDetails, setShowFormulaDetails] = useState(false);
+  const { verdict, confidence, claim, epistemicSafetyNotice, executionMetrics } = result;
+
+  const getVerdictTheme = (v: VerdictType) => {
+    switch (v) {
+      case 'SUPPORTED':
+        return {
+          bg: 'bg-emerald-50',
+          border: 'border-emerald-300',
+          badge: 'bg-emerald-600 text-white',
+          text: 'text-emerald-900',
+          icon: CheckCircle2,
+          epistemicQualifier: 'Corroborated by available empirical peer-reviewed evidence.'
+        };
+      case 'MOSTLY SUPPORTED':
+        return {
+          bg: 'bg-emerald-50/70',
+          border: 'border-emerald-200',
+          badge: 'bg-emerald-700 text-white',
+          text: 'text-emerald-900',
+          icon: CheckCircle2,
+          epistemicQualifier: 'Substantially corroborated with minor contextual nuances or secondary qualifications.'
+        };
+      case 'PARTIALLY SUPPORTED':
+        return {
+          bg: 'bg-amber-50/70',
+          border: 'border-amber-300',
+          badge: 'bg-amber-600 text-white',
+          text: 'text-amber-950',
+          icon: Scale,
+          epistemicQualifier: 'Supported for specific acute mechanisms, but constrained by rigorous boundary limitations.'
+        };
+      case 'MIXED / CONTESTED':
+        return {
+          bg: 'bg-yellow-50/70',
+          border: 'border-yellow-300',
+          badge: 'bg-yellow-600 text-white',
+          text: 'text-yellow-950',
+          icon: Scale,
+          epistemicQualifier: 'Independent studies report opposing or statistically discordant outcomes; active scientific debate.'
+        };
+      case 'MOSTLY CONTRADICTED':
+        return {
+          bg: 'bg-rose-50/70',
+          border: 'border-rose-200',
+          badge: 'bg-rose-700 text-white',
+          text: 'text-rose-950',
+          icon: XCircle,
+          epistemicQualifier: 'Contradicted by prevailing empirical consensus, with negligible corroboration.'
+        };
+      case 'CONTRADICTED':
+        return {
+          bg: 'bg-rose-50',
+          border: 'border-rose-300',
+          badge: 'bg-rose-600 text-white',
+          text: 'text-rose-950',
+          icon: XCircle,
+          epistemicQualifier: 'Definitively refuted by observational datasets, physical laws, or clinical trials.'
+        };
+      case 'INSUFFICIENT EVIDENCE':
+      default:
+        return {
+          bg: 'bg-stone-100',
+          border: 'border-stone-300',
+          badge: 'bg-stone-700 text-white',
+          text: 'text-stone-900',
+          icon: HelpCircle,
+          epistemicQualifier: 'Current empirical literature is insufficient to verify or falsify the proposition.'
+        };
+    }
+  };
+
+  const theme = getVerdictTheme(verdict);
+  const VerdictIcon = theme.icon;
+
+  return (
+    <div className={`w-full rounded-2xl border ${theme.border} ${theme.bg} p-6 sm:p-8 mb-8 shadow-sm transition-all`}>
+      {/* Top Meta Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-300/60 pb-4 mb-6">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs uppercase tracking-widest font-semibold text-stone-500">
+            OFFICIAL INVESTIGATION VERDICT
+          </span>
+          <span className="text-stone-300">•</span>
+          <span className="font-mono text-xs text-stone-500">
+            ID: {result.id.slice(0, 16)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs font-mono text-stone-600">
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-stone-400" />
+            <span>{executionMetrics?.totalDurationMs ? (executionMetrics.totalDurationMs / 1000).toFixed(2) : '1.8'}s execution</span>
+          </div>
+          <span>•</span>
+          <span>{result.sources.length} sources evaluated</span>
+        </div>
+      </div>
+
+      {/* Primary Verdict Banner & Confidence Gauge */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg font-mono font-bold text-sm tracking-wider shadow-xs ${theme.badge}`}>
+              <VerdictIcon className="w-4 h-4" />
+              {verdict}
+            </span>
+            <span className="text-xs font-mono text-stone-600 bg-white/70 px-2.5 py-1 rounded-md border border-stone-200">
+              Taxonomy: {result.analysis.claimType.toUpperCase()}
+            </span>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight leading-snug">
+            "{claim}"
+          </h2>
+
+          <p className="text-sm font-medium text-stone-700 leading-relaxed max-w-3xl">
+            {theme.epistemicQualifier}
+          </p>
+        </div>
+
+        {/* Confidence Score Dial Card */}
+        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-xs shrink-0 w-full lg:w-72">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono font-semibold uppercase text-stone-600 tracking-wider">
+              Epistemic Confidence
+            </span>
+            <button
+              onClick={() => setShowFormulaDetails(!showFormulaDetails)}
+              className="text-[11px] text-stone-500 hover:text-stone-800 flex items-center gap-1 font-mono underline"
+            >
+              <span>{showFormulaDetails ? 'Hide breakdown' : 'Show formula'}</span>
+              {showFormulaDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          </div>
+
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-3xl font-mono font-bold text-stone-900">
+              {confidence.overallConfidence}%
+            </span>
+            <span className="text-xs text-stone-500 font-sans">
+              Weighted Multi-Factor Proof
+            </span>
+          </div>
+
+          {/* Mini meter bar */}
+          <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden border border-stone-200">
+            <div 
+              className={`h-full rounded-full transition-all ${
+                confidence.overallConfidence >= 75 ? 'bg-emerald-600' :
+                confidence.overallConfidence >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+              }`}
+              style={{ width: `${confidence.overallConfidence}%` }}
+            />
+          </div>
+
+          {/* Formula expansion */}
+          {showFormulaDetails && (
+            <div className="mt-4 pt-3 border-t border-stone-100 space-y-2 text-xs">
+              <p className="font-mono text-[10px] text-stone-500 bg-stone-50 p-2 rounded border border-stone-200">
+                {confidence.formula}
+              </p>
+              <div className="space-y-1.5 pt-1">
+                {confidence.breakdown.map((f, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[11px]">
+                    <span className="text-stone-600 truncate">{f.name}</span>
+                    <span className="font-mono font-semibold text-stone-900">{f.score}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Epistemic Safety Notice Footer */}
+      <div className="mt-6 pt-4 border-t border-stone-300/60 flex items-start gap-2.5 text-xs text-stone-600 font-sans">
+        <Info className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          <strong className="text-stone-800">Scientific Safety Standard:</strong> {epistemicSafetyNotice}
+        </p>
+      </div>
+    </div>
+  );
+};

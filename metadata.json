@@ -1,0 +1,6 @@
+{
+  "name": "ARGUS: Claim Verification & Reasoning System",
+  "description": "An agentic AI and NLP system that investigates natural-language claims through decomposition, multi-source evidence retrieval, stance classification, contradiction detection, and explainable epistemic synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
