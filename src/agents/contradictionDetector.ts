@@ -5,8 +5,9 @@
  * DIRECT_CONTRADICTION vs QUALIFICATION vs DIFFERENT_CONTEXT vs TEMPORAL_DISCREPANCY vs METHODOLOGICAL_DISAGREEMENT.
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { ContradictionFinding, EvidenceItem, ClaimAnalysis } from '../types';
+import { callGeminiWithTimeout } from '../nlp/geminiClient';
 
 export async function detectContradictions(
   analysis: ClaimAnalysis,
@@ -70,7 +71,6 @@ export async function detectContradictions(
   // Model-assisted deep contradiction scan if API key available
   if (apiKey && evidence.length >= 2) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
       const prompt = `You are the ARGUS Contradiction Detection Agent.
 Analyze these scientific and factual findings regarding: "${analysis.originalClaim}".
 Evidence excerpts:
@@ -86,31 +86,27 @@ Distinguish:
 
 Return JSON array of findings.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                type: { type: Type.STRING },
-                description: { type: Type.STRING },
-                sourceA: { type: Type.STRING },
-                statementA: { type: Type.STRING },
-                sourceB: { type: Type.STRING },
-                statementB: { type: Type.STRING },
-                severity: { type: Type.STRING }
-              },
-              required: ['type', 'description', 'sourceA', 'statementA', 'sourceB', 'statementB', 'severity']
-            }
+      const responseText = await callGeminiWithTimeout(apiKey, prompt, {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING },
+              description: { type: Type.STRING },
+              sourceA: { type: Type.STRING },
+              statementA: { type: Type.STRING },
+              sourceB: { type: Type.STRING },
+              statementB: { type: Type.STRING },
+              severity: { type: Type.STRING }
+            },
+            required: ['type', 'description', 'sourceA', 'statementA', 'sourceB', 'statementB', 'severity']
           }
         }
-      });
+      }, 7000);
 
-      const parsed = JSON.parse(response.text?.trim() || '[]');
+      const parsed = JSON.parse(responseText.trim() || '[]');
       if (Array.isArray(parsed) && parsed.length > 0) {
         parsed.forEach((p: any, idx: number) => {
           findings.push({

@@ -4,10 +4,11 @@
  * atomic subclaims, causal assertions, and ambiguity indicators.
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { ClaimAnalysis, ClaimType, Entity, Subclaim } from '../types';
 import { extractEntities, detectCausalAssertion, UNIVERSAL_QUALIFIERS } from '../nlp/ner';
 import { cleanText } from '../nlp/tokenizer';
+import { callGeminiWithTimeout } from '../nlp/geminiClient';
 
 export async function analyzeClaim(claimText: string, apiKey?: string): Promise<ClaimAnalysis> {
   const cleaned = cleanText(claimText);
@@ -48,10 +49,7 @@ export async function analyzeClaim(claimText: string, apiKey?: string): Promise<
   // If Gemini API is configured, use model-assisted decomposition for deep epistemic rigor
   if (apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `You are the ARGUS Claim Analyzer Agent. 
+      const prompt = `You are the ARGUS Claim Analyzer Agent. 
 Analyze this claim with rigorous epistemic decomposition:
 "${cleaned}"
 
@@ -62,53 +60,53 @@ Break this claim down into:
 4. Semantic ambiguities or unstated assumptions
 5. Entities with types
 
-Return JSON only conforming to the schema.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              claimType: { type: Type.STRING },
-              entities: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    text: { type: Type.STRING },
-                    type: { type: Type.STRING }
-                  },
-                  required: ['text', 'type']
-                }
-              },
-              subclaims: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    text: { type: Type.STRING },
-                    type: { type: Type.STRING },
-                    isControversial: { type: Type.BOOLEAN },
-                    verificationTarget: { type: Type.STRING }
-                  },
-                  required: ['id', 'text', 'type', 'isControversial', 'verificationTarget']
-                }
-              },
-              verificationQuestions: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              ambiguities: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
+Return JSON only conforming to the schema.`;
+
+      const responseText = await callGeminiWithTimeout(apiKey, prompt, {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            claimType: { type: Type.STRING },
+            entities: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  type: { type: Type.STRING }
+                },
+                required: ['text', 'type']
               }
             },
-            required: ['claimType', 'entities', 'subclaims', 'verificationQuestions', 'ambiguities']
-          }
+            subclaims: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  type: { type: Type.STRING },
+                  isControversial: { type: Type.BOOLEAN },
+                  verificationTarget: { type: Type.STRING }
+                },
+                required: ['id', 'text', 'type', 'isControversial', 'verificationTarget']
+              }
+            },
+            verificationQuestions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            ambiguities: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ['claimType', 'entities', 'subclaims', 'verificationQuestions', 'ambiguities']
         }
-      });
+      }, 2500);
 
-      const parsed = JSON.parse(response.text?.trim() || '{}');
+      const parsed = JSON.parse(responseText.trim() || '{}');
       if (parsed.subclaims && parsed.subclaims.length > 0) {
         return {
           originalClaim: cleaned,
@@ -126,8 +124,8 @@ Return JSON only conforming to the schema.`,
           causalAssertions: causal ? [{ cause: causal.cause, effect: causal.effect, qualifier: causal.verb }] : []
         };
       }
-    } catch (err) {
-      console.warn('ARGUS Claim Analyzer: Falling back to deterministic NLP decomposition', err);
+    } catch (err: any) {
+      console.info('[ARGUS Claim Analyzer] Decomposing with deterministic NLP parser:', err.message);
     }
   }
 

@@ -4,9 +4,10 @@
  * Stance (SUPPORTS / CONTRADICTS / QUALIFIES / IRRELEVANT), causal attribution, empirical strength, and authority.
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { EvidenceItem, ClaimAnalysis } from '../types';
 import { classifyStanceRuleBased } from '../nlp/stance';
+import { callGeminiWithTimeout } from '../nlp/geminiClient';
 
 export async function analyzeEvidence(
   evidenceList: EvidenceItem[],
@@ -18,7 +19,6 @@ export async function analyzeEvidence(
   // Deep model-assisted classification if API key available
   if (apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
       const prompt = `You are the ARGUS Evidence Analyzer Agent.
 Evaluate each of the following evidence passages against its corresponding subclaim.
 Target Claim: "${analysis.originalClaim}"
@@ -39,29 +39,25 @@ For each item, determine:
 
 Return JSON array.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                itemIndex: { type: Type.INTEGER },
-                stance: { type: Type.STRING },
-                stanceConfidence: { type: Type.INTEGER },
-                isCausationEstablished: { type: Type.BOOLEAN },
-                reasoning: { type: Type.STRING }
-              },
-              required: ['itemIndex', 'stance', 'stanceConfidence', 'isCausationEstablished', 'reasoning']
-            }
+      const responseText = await callGeminiWithTimeout(apiKey, prompt, {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              itemIndex: { type: Type.INTEGER },
+              stance: { type: Type.STRING },
+              stanceConfidence: { type: Type.INTEGER },
+              isCausationEstablished: { type: Type.BOOLEAN },
+              reasoning: { type: Type.STRING }
+            },
+            required: ['itemIndex', 'stance', 'stanceConfidence', 'isCausationEstablished', 'reasoning']
           }
         }
-      });
+      }, 7000);
 
-      const parsedArray = JSON.parse(response.text?.trim() || '[]');
+      const parsedArray = JSON.parse(responseText.trim() || '[]');
       if (Array.isArray(parsedArray) && parsedArray.length > 0) {
         return evidenceList.map((item, idx) => {
           const match = parsedArray.find(p => p.itemIndex === idx + 1) || parsedArray[idx];

@@ -63,7 +63,7 @@ export function classifyStanceRuleBased(subclaim: string, excerpt: string): Stan
     };
   }
 
-  let supportScore = supportMatches.length * 2.5 + (overlap > 0.15 ? 1.5 : 0.5);
+  let supportScore = supportMatches.length * 2.5;
   let contradictScore = contradictMatches.length * 3.0 + (hasNegation ? 1.5 : 0);
   let qualifyScore = qualifyMatches.length * 2.0;
 
@@ -71,18 +71,23 @@ export function classifyStanceRuleBased(subclaim: string, excerpt: string): Stan
   let stance: StanceType = 'QUALIFIES';
   let conf = 70;
 
-  if (contradictScore > supportScore && contradictScore > qualifyScore) {
+  if (supportMatches.length === 0 && contradictMatches.length === 0 && qualifyMatches.length === 0) {
+    if (hasNegation) {
+      stance = 'CONTRADICTS';
+      conf = 68;
+    } else {
+      stance = 'QUALIFIES';
+      conf = 65;
+    }
+  } else if (contradictScore > supportScore && contradictScore >= qualifyScore) {
     stance = 'CONTRADICTS';
     conf = Math.min(95, 60 + contradictScore * 8);
-  } else if (supportScore > contradictScore && supportScore > qualifyScore) {
+  } else if (supportScore > contradictScore && supportScore >= qualifyScore) {
     stance = 'SUPPORTS';
     conf = Math.min(95, 60 + supportScore * 7);
-  } else if (qualifyScore > 0 || Math.abs(supportScore - contradictScore) < 1.0) {
-    stance = 'QUALIFIES';
-    conf = Math.min(90, 65 + qualifyScore * 6);
   } else {
     stance = 'QUALIFIES';
-    conf = 65;
+    conf = Math.min(90, 65 + qualifyScore * 6);
   }
 
   return {

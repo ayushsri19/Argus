@@ -4,8 +4,9 @@
  * Never asserts subjective morality or absolute certainty.
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { ClaimAnalysis, EvidenceItem, ContradictionFinding, VerdictType } from '../types';
+import { callGeminiWithTimeout } from '../nlp/geminiClient';
 
 export interface ReasoningOutput {
   suggestedVerdict: VerdictType;
@@ -49,7 +50,6 @@ export async function synthesizeReasoning(
   // If Gemini API is available, perform deep model-based epistemic reasoning
   if (apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
       const prompt = `You are the ARGUS Epistemic Reasoning Agent.
 Synthesize the available empirical evidence for the following claim:
 "${analysis.originalClaim}"
@@ -73,51 +73,47 @@ EPISTEMIC DIRECTIVES:
 
 Return JSON only.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              suggestedVerdict: { type: Type.STRING },
-              synthesis: { type: Type.STRING },
-              supportingArguments: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              contradictingArguments: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              qualifyingArguments: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              assumptions: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              uncertainties: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              }
+      const responseText = await callGeminiWithTimeout(apiKey, prompt, {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            suggestedVerdict: { type: Type.STRING },
+            synthesis: { type: Type.STRING },
+            supportingArguments: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
             },
-            required: [
-              'suggestedVerdict',
-              'synthesis',
-              'supportingArguments',
-              'contradictingArguments',
-              'qualifyingArguments',
-              'assumptions',
-              'uncertainties'
-            ]
-          }
+            contradictingArguments: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            qualifyingArguments: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            assumptions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            uncertainties: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: [
+            'suggestedVerdict',
+            'synthesis',
+            'supportingArguments',
+            'contradictingArguments',
+            'qualifyingArguments',
+            'assumptions',
+            'uncertainties'
+          ]
         }
-      });
+      }, 7500);
 
-      const parsed = JSON.parse(response.text?.trim() || '{}');
+      const parsed = JSON.parse(responseText.trim() || '{}');
       if (parsed.suggestedVerdict) {
         return {
           suggestedVerdict: parsed.suggestedVerdict as VerdictType,

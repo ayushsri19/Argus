@@ -43,59 +43,91 @@ export function App() {
     setEventHistory([]);
 
     try {
-      // Use Server-Sent Events / streaming endpoint
-      const response = await fetch('/api/investigate/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: claimText })
-      });
+      let gotResult = false;
 
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP status ${response.status}`);
-      }
+      // 1. Attempt Server-Sent Events / streaming pipeline for live stage telemetry
+      try {
+        const response = await fetch('/api/investigate/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ claim: claimText })
+        });
 
-      if (!response.body) {
-        throw new Error('ReadableStream not supported by browser.');
-      }
+        if (response.ok && response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const block of lines) {
-          if (!block.trim()) continue;
-          const matchEvent = block.match(/event:\s*(.+)/);
-          const matchData = block.match(/data:\s*(.+)/s);
-
-          if (matchEvent && matchData) {
-            const eventType = matchEvent[1].trim();
-            try {
-              const data = JSON.parse(matchData[1].trim());
-              if (eventType === 'stage') {
-                setCurrentEvent(data);
-                setEventHistory(prev => [...prev, data]);
-              } else if (eventType === 'result') {
-                setResult(data);
-              } else if (eventType === 'error') {
-                throw new Error(data.message || 'Investigation error');
+            for (const block of lines) {
+              const trimmed = block.trim();
+              if (!trimmed || trimmed.startsWith(':')) {
+                // Heartbeat ping from server
+                continue;
               }
-            } catch (e) {
-              // Ignore partial JSON parse errors
+
+              const matchEvent = trimmed.match(/event:\s*(.+)/);
+              const matchData = trimmed.match(/data:\s*(.+)/s);
+
+              if (matchEvent && matchData) {
+                const eventType = matchEvent[1].trim();
+                try {
+                  const data = JSON.parse(matchData[1].trim());
+                  if (eventType === 'stage') {
+                    setCurrentEvent(data);
+                    setEventHistory(prev => [...prev, data]);
+                  } else if (eventType === 'result') {
+                    setResult(data);
+                    gotResult = true;
+                  } else if (eventType === 'error') {
+                    console.warn('Stream received error event:', data.message);
+                  }
+                } catch (e) {
+                  // Ignore partial JSON parse chunks
+                }
+              }
             }
           }
         }
+      } catch (streamErr) {
+        console.warn('Streaming encountered an issue, transitioning to direct API endpoint:', streamErr);
+      }
+
+      // 2. Seamless fallback to direct JSON endpoint if stream was interrupted or dropped
+      if (!gotResult) {
+        setCurrentEvent({
+          stage: 'REASONING',
+          message: 'Finalizing agent reasoning and synthesizing structured verdict...',
+          progressPercent: 92,
+          agentName: 'Reasoning Agent',
+          timestamp: new Date().toISOString()
+        });
+
+        const fallbackRes = await fetch('/api/investigate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ claim: claimText })
+        });
+
+        if (!fallbackRes.ok) {
+          const errData = await fallbackRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Server returned HTTP status ${fallbackRes.status}`);
+        }
+
+        const data = await fallbackRes.json();
+        setResult(data);
+        gotResult = true;
       }
     } catch (err: any) {
       console.error('Investigation failed:', err);
-      setError(err.message || 'An unexpected error occurred during investigation.');
+      setError(err.message || 'An unexpected error occurred during investigation. Please retry.');
     } finally {
       setIsLoading(false);
     }

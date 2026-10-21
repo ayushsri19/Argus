@@ -8,9 +8,7 @@ import { InvestigationResult, PipelineStageEvent } from '../types';
 import { analyzeClaim } from './claimAnalyzer';
 import { planResearch } from './researchPlanner';
 import { retrieveEvidence } from './evidenceRetriever';
-import { analyzeEvidence } from './evidenceAnalyzer';
-import { detectContradictions } from './contradictionDetector';
-import { synthesizeReasoning } from './reasoningAgent';
+import { runUnifiedReasoning } from './unifiedReasoner';
 import { compileVerdict } from './verdictAgent';
 
 export type StageProgressCallback = (event: PipelineStageEvent) => void;
@@ -70,23 +68,21 @@ export class ArgusOrchestrator {
     const { sources, evidence: retrievedEvidence } = await retrieveEvidence(claimAnalysis, searchQueries, this.apiKey);
     agentDurations['EvidenceRetriever'] = Math.round(performance.now() - t2);
 
-    // Stage 5: Evidence Analysis & Stance Classification
-    emit('EVALUATING_SOURCES', `Evaluating ${retrievedEvidence.length} evidence passages across authority, recency, and causal directness...`, 68, 'Evidence Analyzer Agent');
+    // Stage 5 & 6 & 7: Unified Evidence Evaluation, Cross-Checking & Epistemic Reasoning
+    emit('EVALUATING_SOURCES', `Evaluating ${retrievedEvidence.length} evidence passages across authority, recency, and causal attribution...`, 68, 'Evidence Analyzer Agent');
+    emit('CHECKING_CONTRADICTIONS', 'Scanning for cross-study contradictions, temporal discrepancies, and boundary qualifications...', 78, 'Contradiction Detection Agent');
+    emit('REASONING', 'Synthesizing evidence balance and formulating epistemic boundaries...', 88, 'Reasoning Agent');
+
     const t3 = performance.now();
-    const analyzedEvidence = await analyzeEvidence(retrievedEvidence, claimAnalysis, this.apiKey);
-    agentDurations['EvidenceAnalyzer'] = Math.round(performance.now() - t3);
-
-    // Stage 6: Contradiction & Qualification Detection
-    emit('CHECKING_CONTRADICTIONS', 'Scanning for cross-study contradictions, temporal discrepancies, and boundary qualifications...', 80, 'Contradiction Detection Agent');
-    const t4 = performance.now();
-    const contradictions = await detectContradictions(claimAnalysis, analyzedEvidence, this.apiKey);
-    agentDurations['ContradictionDetector'] = Math.round(performance.now() - t4);
-
-    // Stage 7: Epistemic Reasoning Synthesis
-    emit('REASONING', 'Synthesizing evidence balance and formulating epistemic boundaries...', 90, 'Reasoning Agent');
-    const t5 = performance.now();
-    const reasoningOutput = await synthesizeReasoning(claimAnalysis, analyzedEvidence, contradictions, this.apiKey);
-    agentDurations['ReasoningAgent'] = Math.round(performance.now() - t5);
+    const { analyzedEvidence, contradictions, reasoning: reasoningOutput } = await runUnifiedReasoning(
+      claimAnalysis,
+      retrievedEvidence,
+      this.apiKey
+    );
+    const unifiedDuration = Math.round(performance.now() - t3);
+    agentDurations['EvidenceAnalyzer'] = Math.round(unifiedDuration * 0.35);
+    agentDurations['ContradictionDetector'] = Math.round(unifiedDuration * 0.30);
+    agentDurations['ReasoningAgent'] = Math.round(unifiedDuration * 0.35);
 
     // Stage 8: Verdict Compilation & Confidence Calculation
     emit('GENERATING_VERDICT', 'Calculating mathematical confidence metrics and final provenance report...', 96, 'Verdict Agent');

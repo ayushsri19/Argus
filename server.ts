@@ -26,6 +26,7 @@ async function startServer() {
   const orchestrator = new ArgusOrchestrator(apiKey);
   const evidenceStore = EvidenceStore.getInstance();
   const historyStore = HistoryStore.getInstance();
+  const claimCache = new Map<string, any>();
 
   // -------------------------------------------------------------
   // API Endpoints
@@ -124,14 +125,55 @@ async function startServer() {
       return res.status(400).json({ error: 'Claim text is required' });
     }
 
+    const trimmedClaim = claim.trim();
+    const cacheKey = trimmedClaim.toLowerCase();
+
     // Set headers for Server-Sent Events (SSE)
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof (res as any).flushHeaders === 'function') {
+      (res as any).flushHeaders();
+    }
 
     const sendEvent = (event: string, data: any) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
     };
+
+    // Instant return if in memory cache
+    if (claimCache.has(cacheKey)) {
+      const cached = claimCache.get(cacheKey);
+      sendEvent('stage', {
+        stage: 'COMPLETE',
+        message: 'Retrieved verified investigation from knowledge cache.',
+        progressPercent: 100,
+        agentName: 'Orchestrator Cache',
+        timestamp: new Date().toISOString()
+      });
+      sendEvent('result', cached);
+      res.write('event: done\ndata: {}\n\n');
+      return res.end();
+    }
+
+    // Keep-alive heartbeat ping every 2.5 seconds to prevent proxy drops and timeouts
+    const pingInterval = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch (e) {
+        clearInterval(pingInterval);
+      }
+    }, 2500);
+
+    req.on('close', () => {
+      clearInterval(pingInterval);
+    });
 
     try {
       historyStore.clearActiveEvents();
@@ -140,9 +182,10 @@ async function startServer() {
         sendEvent('stage', stageEvent);
       };
 
-      const result = await orchestrator.runInvestigation(claim.trim(), progressHandler);
+      const result = await orchestrator.runInvestigation(trimmedClaim, progressHandler);
 
-      // Store in memory
+      // Store in memory & cache
+      claimCache.set(cacheKey, result);
       evidenceStore.storeEvidence(result.evidence);
       historyStore.saveInvestigation(result);
 
@@ -151,9 +194,11 @@ async function startServer() {
       res.end();
     } catch (err: any) {
       console.error('Investigation error:', err);
-      historyStore.recordError(claim, err.message || 'Unknown error');
+      historyStore.recordError(trimmedClaim, err.message || 'Unknown error');
       sendEvent('error', { message: err.message || 'Investigation failed' });
       res.end();
+    } finally {
+      clearInterval(pingInterval);
     }
   });
 
@@ -164,8 +209,16 @@ async function startServer() {
       return res.status(400).json({ error: 'Claim text is required' });
     }
 
+    const trimmedClaim = claim.trim();
+    const cacheKey = trimmedClaim.toLowerCase();
+
+    if (claimCache.has(cacheKey)) {
+      return res.json(claimCache.get(cacheKey));
+    }
+
     try {
-      const result = await orchestrator.runInvestigation(claim.trim());
+      const result = await orchestrator.runInvestigation(trimmedClaim);
+      claimCache.set(cacheKey, result);
       evidenceStore.storeEvidence(result.evidence);
       historyStore.saveInvestigation(result);
       res.json(result);
