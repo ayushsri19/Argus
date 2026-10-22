@@ -31,6 +31,13 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
 
   const handleSelectSample = (sample: SampleClaimItem) => {
     setClaim(sample.claim);
+    if (!isLoading) {
+      onInvestigate(sample.claim);
+    }
+  };
+
+  const handleClear = () => {
+    setClaim('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -43,6 +50,10 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
     <div className="w-full max-w-4xl mx-auto py-8 px-4 sm:px-6">
       {/* Introduction Hero */}
       <div className="text-center mb-8">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-200/60 border border-stone-300 text-stone-700 text-xs font-mono mb-3">
+          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          <span>Multi-Agent Epistemic Reasoning • Sub-Second Verification</span>
+        </div>
         <h1 className="font-['Cinzel'] text-3xl sm:text-4xl font-bold tracking-tight text-stone-900 mb-3">
           Epistemic Claim Verification
         </h1>
@@ -53,10 +64,21 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
 
       {/* Main Input Form */}
       <form onSubmit={handleSubmit} className="relative bg-white rounded-xl border border-stone-300 shadow-sm hover:border-stone-400 transition-all focus-within:ring-2 focus-within:ring-stone-800/10 focus-within:border-stone-800">
-        <div className="p-4 sm:p-5">
-          <label htmlFor="claim-input" className="block text-xs font-mono uppercase tracking-wider text-stone-500 mb-2 font-semibold">
-            Enter a natural-language claim to investigate:
-          </label>
+        <div className="p-4 sm:p-5 relative">
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="claim-input" className="block text-xs font-mono uppercase tracking-wider text-stone-500 font-semibold">
+              Enter a natural-language claim to investigate:
+            </label>
+            {claim && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors"
+              >
+                Clear input
+              </button>
+            )}
+          </div>
           <textarea
             id="claim-input"
             rows={3}
@@ -104,7 +126,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-stone-600">
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Curated Academic Test Claims</span>
+            <span>Curated Academic Test Claims (Click to Run Immediately)</span>
           </div>
 
           {/* Category Filter Pills */}
@@ -132,7 +154,8 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
               key={idx}
               type="button"
               onClick={() => handleSelectSample(item)}
-              className="text-left p-3 rounded-lg border border-stone-200 bg-white/70 hover:bg-white hover:border-stone-400 transition-all group flex flex-col justify-between"
+              disabled={isLoading}
+              className="text-left p-3 rounded-lg border border-stone-200 bg-white/70 hover:bg-white hover:border-stone-400 hover:shadow-xs transition-all group flex flex-col justify-between cursor-pointer disabled:opacity-50"
             >
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 font-medium">
@@ -144,7 +167,10 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onInvestigate, isLoading
               </div>
               <div className="mt-2 text-[10px] text-stone-500 font-mono flex items-center justify-between">
                 <span>Expected: {item.expectedVerdictPreview.split(' ')[0]}</span>
-                <span className="text-stone-400 group-hover:translate-x-0.5 transition-transform">→</span>
+                <span className="text-stone-400 group-hover:text-stone-800 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                  <span>Verify</span>
+                  <span>→</span>
+                </span>
               </div>
             </button>
           ))}

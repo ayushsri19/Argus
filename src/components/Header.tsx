@@ -5,13 +5,19 @@ interface HeaderProps {
   onOpenBenchmark: () => void;
   onOpenLogs: () => void;
   onOpenMethodology: () => void;
+  systemStatus?: {
+    cachedClaimsCount?: number;
+    evidenceCorpusCount?: number;
+    status?: string;
+  } | null;
   activeTab?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenBenchmark,
   onOpenLogs,
-  onOpenMethodology
+  onOpenMethodology,
+  systemStatus
 }) => {
   return (
     <header className="border-b border-stone-200 bg-stone-50/90 backdrop-blur-md sticky top-0 z-40">
@@ -67,9 +73,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="h-4 w-px bg-stone-300 mx-1 hidden sm:block" />
 
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] font-mono font-medium">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] font-mono font-medium" title={systemStatus ? `${systemStatus.cachedClaimsCount || 0} claims cached in memory` : 'Multi-Agent pipeline active'}>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Multi-Agent Live</span>
+            <span>{systemStatus?.cachedClaimsCount ? `Engine Ready (${systemStatus.cachedClaimsCount} cached)` : 'Multi-Agent Live'}</span>
           </div>
         </div>
       </div>
